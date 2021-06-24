@@ -1,0 +1,363 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+housing = read.csv('./data/Ames_Housing_Price_Data.csv')
+housing$X <- NULL
+head(housing)
+```
+
+
+```{r}
+str(housing)
+summary(housing)
+colSums(is.na(housing))
+```
+
+
+```{r}
+sapply(housing, function(i) sum(housing$i=='')) 
+```
+
+
+```{r}
+sum(housing$Alley== '')
+
+# for (i in colnames(housing)){
+#   print(sum(housing$i==''))
+# }
+
+# for(i in 1:ncol(housing)) {       # for-loop over columns
+#   print(sum(housing$i==''))
+# }
+
+```
+
+
+```{r}
+building = housing %>% select(-c(MoSold, YrSold, MSZoning, Neighborhood, Condition1, Condition2, LotFrontage, LotArea, LotShape, LotConfig, LandContour, LandSlope, Street, Alley)) 
+colnames(building)
+dim(building)
+```
+
+
+```{r}
+area_sf = building %>% select(SalePrice, contains("Area",ignore.case = TRUE), contains("SF",ignore.case = TRUE))
+area_sf
+str(area_sf)
+```
+
+```{r}
+colSums(is.na(area_sf))
+
+```
+
+
+```{r}
+area_sf = area_sf %>% replace(is.na(.), 0)
+colSums(is.na(area_sf))
+```
+
+
+```{r}
+area_cor = round(cor(area_sf),2)
+head(area_cor)
+```
+
+```{r}
+library(reshape2)
+melted_area_cor <- melt(area_cor)
+head(melted_area_cor)
+
+```
+
+
+```{r}
+ggplot(data = melted_area_cor, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+```
+
+
+```{r}
+# Get upper triangle of the correlation matrix
+  get_upper_tri <- function(area_cor){
+    area_cor[lower.tri(area_cor)]<- NA
+    return(area_cor)
+  }
+
+upper_tri <- get_upper_tri(area_cor)
+upper_tri
+```
+
+
+```{r}
+melted_area_cor <- melt(upper_tri, na.rm = TRUE)
+
+ggplot(data = melted_area_cor, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Pearson\nCorrelation") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 12, hjust = 1))+
+ coord_fixed()
+
+
+#NEGATIVE CORRELATIONS ARE IN BLUE AND POSITIVE CORRELATIONS ARE IN RED 
+```
+
+
+```{r}
+# REORDER THE CORRELATION MATRIX AND HEATMAP 
+reorder_area_cor <- function(area_cor){
+# Use correlation between variables as distance
+dd <- as.dist((1-area_cor)/2)
+hc <- hclust(dd)
+area_cor <-area_cor[hc$order, hc$order]
+}
+
+# Reorder the correlation matrix
+area_cor <- reorder_area_cor(area_cor)
+upper_tri <- get_upper_tri(area_cor)
+# Melt the correlation matrix
+melted_area_cor <- melt(upper_tri, na.rm = TRUE)
+# Create a ggheatmap
+ggheatmap <- ggplot(melted_area_cor, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+    name="Pearson\nCorrelation") +
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 12, hjust = 1))+
+ coord_fixed()
+# Print the heatmap
+print(ggheatmap)
+
+```
+
+
+```{r}
+#Add correlation coefficients on the heatmap - help source:
+#http://www.sthda.com/english/wiki/ggplot2-quick-correlation-matrix-heatmap-r-software-and-data-visualization
+
+ggheatmap + 
+geom_text(aes(Var2, Var1, label = value), color = "black", size = 2.5) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  legend.justification = c(1, 0),
+  legend.position = c(0.6, 0.7),
+  legend.direction = "horizontal")+
+  guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                title.position = "top", title.hjust = 0.5))
+```
+
+```{r}
+area_sf2 = building %>% select(contains("Area",ignore.case = TRUE), contains("SF",ignore.case = TRUE), EnclosedPorch, X3SsnPorch, ScreenPorch)
+area_sf2 = area_sf2 %>% replace(is.na(.), 0)
+colSums(is.na(area_sf2))
+
+area_cor2 = cor(area_sf2, building$SalePrice, method ="pearson")
+
+area_cor2 = data.frame(area_cor2)
+colnames(area_cor2)=c('Correlation')
+area_cor2 %>% arrange(desc(area_cor2))
+```
+
+```{r}
+building_without_area = building %>% select(SalePrice, (-colnames(area_sf)))
+str(building_without_area)
+```
+
+
+```{r}
+building_without_area %>% group_by(MSSubClass) %>% summarise(count = sum(n())) %>% arrange(desc(count)) %>% ggplot(aes(x=reorder(MSSubClass, -count), y=count)) + geom_bar(stat='identity', color = 'cadetblue1', fill = 'cadetblue1') + ylab('# of Houses') + xlab('Type of Dwelling') + ggtitle('Which type of Dwelling is sold more?') + theme_bw() 
+```
+
+
+```{r}
+# MSSubClass: Identifies the type of dwelling involved in the sale.	
+#         20	1-STORY 1946 & NEWER ALL STYLES
+#         30	1-STORY 1945 & OLDER
+#         40	1-STORY W/FINISHED ATTIC ALL AGES
+#         45	1-1/2 STORY - UNFINISHED ALL AGES
+#         50	1-1/2 STORY FINISHED ALL AGES
+#         60	2-STORY 1946 & NEWER
+#         70	2-STORY 1945 & OLDER
+#         75	2-1/2 STORY ALL AGES
+#         80	SPLIT OR MULTI-LEVEL
+#         85	SPLIT FOYER
+#         90	DUPLEX - ALL STYLES AND AGES
+#        120	1-STORY PUD (Planned Unit Development) - 1946 & NEWER
+#        150	1-1/2 STORY PUD - ALL AGES
+#        160	2-STORY PUD - 1946 & NEWER
+#        180	PUD - MULTILEVEL - INCL SPLIT LEV/FOYER
+#        190	2 FAMILY CONVERSION - ALL STYLES AND AGES
+building_without_area %>% select(MSSubClass, SalePrice) %>% ggplot() + geom_point(aes(MSSubClass, SalePrice)) + scale_x_continuous("MSSubClass", breaks = c(20,30,40,45,50,60,70,75,80,85,90,120,150,160,180,190),  labels = c("20","30","40","45","50","60","70","75","80","85","90","120","150","160","180","190")) + ggtitle('SalePrice by DwellingType')
+```
+
+```{r}
+building_without_area %>% select(YearBuilt, SalePrice) %>% ggplot() + geom_point(aes(YearBuilt, SalePrice))
+```
+
+
+```{r}
+building_without_area %>% select(YearRemodAdd, SalePrice) %>% ggplot() + geom_point(aes(YearRemodAdd, SalePrice))
+```
+
+
+```{r}
+housing %>% group_by(Street) %>% summarise(count = n()) %>% arrange(desc(count))
+
+
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
