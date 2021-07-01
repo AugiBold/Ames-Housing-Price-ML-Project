@@ -1,0 +1,660 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+```{r}
+housing_fill = read.csv('housing_fill.csv', header = TRUE)
+```
+```{r}
+housing_fill[, order(names(housing_fill))]
+```
+```{r}
+#par(mar=c(1,1,1,1))
+#plot(housing_fill.Alley, housing_fill.SalePrice)
+```
+```{r}
+housing_fill %>% 
+ggplot(aes(x=Alley, y =SalePrice))+
+  geom_bar(stat='identity')
+```
+```{r}
+housing_fill %>% 
+  filter(., Alley!='Naa')
+```
+
+```{r}
+housing_fill_drop = read.csv('housing_fill_drop.csv', header = TRUE)
+```
+```{r}
+head(housing_fill_drop)
+```
+```{r}
+summary(housing_fill_drop[c(3:80)])
+```
+```{r}
+cor(housing_fill_drop[-c(1:2)], housing_fill_drop$SalePrice)
+```
+
+```{r}
+rooms1 = housing_fill_drop %>% 
+ select(BsmtFullBath, FullBath, TotRmsAbvGrd, SalePrice)
+```
+```{r}
+cor(rooms1)
+```
+
+
+```{r}
+# Creating a dataframe with selected columns specifying "number of rooms"
+rooms = housing_fill_drop %>% 
+ select(BsmtFullBath, FullBath, BedroomAbvGr, TotRmsAbvGrd, SalePrice)
+```
+```{r}
+head(rooms)
+```
+
+```{r}
+# Correlation between features in rooms dataframe. FullBath and BedroomAbvGr seem to be strongly correlated with TotRmsAbvGrd
+# Also BedroomAbvGr seem strongly correlated with FullBath. Additionally, FullBath seems to have stronger correlation with SalePrice compared to BedroomAbvGr.
+# Data dictionary tells us that TotRmsAbvGrd includes BedroomAbvGr and KitchenAbvGr but not bathrooms, so I guess it wouldn't hurt to leave out the BedroomAbvGr
+cor(rooms)
+```
+
+```{r}
+# Plots confirm same conclusions as above
+plot(rooms)
+```
+```{r}
+model_rooms = lm(SalePrice ~ ., data = rooms)
+# p-values for all variables look good. In order to prevent multicollinearity, as a first measure, I would likely drop BedroomAbvGr
+summary(model_rooms)
+```
+```{r}
+model_rooms1 = lm(SalePrice ~ ., data = rooms1)
+```
+
+
+```{r}
+rooms2 =housing_fill_drop %>% 
+ select(BsmtFullBath, FullBath, TotRmsAbvGrd, SalePrice) %>% 
+  mutate(., BsmtFullBath = factor(BsmtFullBath, ordered=TRUE), FullBath = factor(FullBath, ordered=TRUE), TotRmsAbvGrd = factor(TotRmsAbvGrd, ordered=TRUE))
+```
+```{r}
+head(rooms2)
+```
+```{r}
+vif(model_rooms)
+```
+```{r}
+vif(model_rooms1)
+```
+
+```{r}
+summary(rooms2$TotRmsAbvGrd)
+```
+
+```{r}
+model_rooms2 = lm(SalePrice ~ ., data = rooms2)
+summary(model_rooms2)
+```
+```{r}
+plot(model_rooms2)
+```
+
+```{r}
+# Selected area related features and created a new dataframe called house_area
+house_area = housing_fill_drop %>% 
+ select(BsmtFinSF1, TotalBsmtSF, GarageArea, GrLivArea, SalePrice, X1stFlrSF, X2ndFlrSF)
+```
+```{r}
+# Correlation b/w house_area features. BsmtFinSF1 seems strongly correlated with TotalBsmtSF, X1stFlrSF and moderatley with GarageArea and GarageCars
+# TotalBsmtSF also strongly correlated with BsmtSF1, GarageArea, GarageCars, GrLivArea, X1FlrSF
+# GarageArea very strongly correlated with GarageCars and strongly with X1stFlrSF. Took away Garage cars
+cor(house_area)
+```
+```{r}
+plot(house_area)
+```
+
+```{r}
+# Not sure why p-value of GrLivArea would be high. It seems strongly correlated with SalePrice
+model_house_area = lm(SalePrice ~ ., data= house_area)
+summary(model_house_area)
+```
+
+```{r}
+# Variance Inflation Factor
+vif(model_house_area)
+```
+```{r}
+# To see individual contributions of each variable, while all other variables reamain constant
+avPlots(model_house_area)
+```
+```{r}
+influencePlot(model_house_area)
+```
+
+```{r}
+# Selected all columns except GrLiv Area to create new model after seeing its high vif
+house_area1 = subset(house_area, select=(-GrLivArea))
+```
+```{r}
+model_house_area1 = lm(SalePrice ~ ., data = house_area1)
+```
+```{r}
+vif(model_house_area1)
+```
+```{r}
+# Much better vifs indicate that all the remaining variables together can explain the GrLivArea variable. Also R^2 is equally good as the one before so better
+summary(model_house_area1)
+```
+
+```{r}
+#Even the 1stSF and 2ndSF show much clear trends below in the absence of GrLivArea
+avPlots(model_house_area1)
+```
+```{r}
+influencePlot(model_house_area1)
+```
+```{r}
+#Partial F-test to compare full and reduced models. High p-value indicates that we have to retain the null hypothesis and thatthere is no difference betwen the 2 models. RSS is also pretty close
+anova(model_house_area, model_house_area1)
+```
+```{r}
+# Information Criterion to compare the models. AIC should be as small as possible AIC=-2ln(likelihood). We can se that AIC and BIC also go down in going from full to rduced model
+AIC(model_house_area, model_house_area1)
+BIC(model_house_area, model_house_area1)
+```
+```{r}
+#Using stepwise regression to automate the variable selection process
+house_area_model.empty = lm(SalePrice ~ 1, data = house_area) #The model with an intercept ONLY
+house_area_model.full = lm(SalePrice ~ ., data = house_area) #The model with ALL variables.
+scope = list(lower = formula(house_area_model.empty), upper = formula(house_area_model.full))
+scope
+```
+```{r}
+# Results not consistent between forward and backwardAIC
+#Stepwise regression using AIC as the criteria (the penalty k = 2).
+forwardAIC = step(house_area_model.empty, scope, direction = "forward", k = 2) # k=2 means we are using AIC criterion
+```
+```{r}
+dim(house_area)
+```
+
+
+```{r}
+#Stepwise regression using BIC as the criteria (the penalty k = log(n)).
+forwardBIC = step(house_area_model.empty, scope, direction = "forward", k = log(2580))
+```
+```{r}
+#For backwardAIC and BIC, the results are consistent as opposed to above
+backwardAIC = step(house_area_model.full, scope, direction = "backward", k = 2)
+```
+
+```{r}
+backwardBIC = step(house_area_model.full, scope, direction = "backward", k = log(2580))
+```
+```{r}
+# This seems to be the best in making correct predictions in terms of what to keep
+bothAIC.empty = step(house_area_model.empty, scope, direction = "both", k = 2)
+```
+
+```{r}
+#Same results as for bothAIC.empty
+bothAIC.full = step(house_area_model.full, scope, direction = "both", k = 2)
+```
+```{r}
+bothBIC.empty = step(house_area_model.empty, scope, direction = "both", k = log(2580))
+```
+
+```{r}
+bothBIC.full = step(house_area_model.full, scope, direction = "both", k = log(2580))
+```
+
+```{r}
+summary(forwardAIC)
+```
+```{r}
+summary(forwardBIC)
+```
+
+```{r}
+summary(backwardAIC)
+```
+```{r}
+summary(backwardBIC)
+```
+
+```{r}
+summary(bothAIC.empty)
+```
+```{r}
+summary(bothBIC.empty)
+```
+
+```{r}
+confint(bothBIC.empty)
+```
+```{r}
+split_ds = sample(nrow(house_area), nrow(house_area)*.7)
+train=house_area[split_ds,]
+test=house_area[-split_ds,]
+```
+```{r}
+house_area_train_model = lm(SalePrice ~ ., data = train)
+```
+```{r}
+vif(house_area_train_model)
+```
+```{r}
+house_area_train_model.empty = lm(SalePrice ~ 1, data = train)
+house_area_train_model.full = lm(SalePrice ~ ., data = train)
+scope = list(lower = formula(house_area_train_model.empty), upper = formula(house_area_train_model.full))
+```
+```{r}
+dim(train)
+```
+
+```{r}
+bothBIC_train.empty =  step(house_area_train_model.empty, scope, direction = "both", k = log(1805))
+```
+```{r}
+summary(bothBIC_train.empty)
+```
+```{r}
+predict(bothBIC_train.empty, test, interval="confidence")
+```
+```{r}
+bothAIC_train.empty =  step(house_area_train_model.empty, scope, direction = "both", k = 2)
+```
+```{r}
+summary(bothAIC_train.empty)
+```
+```{r}
+conf.band = predict(bothBIC_train.empty, test, interval="confidence")
+pred.band = predict(bothBIC_train.empty, test, interval="prediction")
+```
+```{r}
+plot(test$TotalBsmtSF, test$SalePrice,
+     xlab = "Ground Living Area", ylab = "Sale Price",
+     main = "Simple Linear Regression Model\nTests Dataset")
+abline(bothBIC_train.empty, lty = 2)
+#lines(test$GrLivArea, conf.band[, 2], col = "blue") #Plotting the lower confidence band.
+#lines(test$GrLivArea, conf.band[, 3], col = "blue") #Plotting the upper confidence band.
+# lines(test$TotalBsmtSF, pred.band[, 2], col = "red") #Plotting the lower prediction band.
+ #lines(test$TotalBsmtSF, pred.band[, 3], col = "red") #Plotting the upper prediction band.
+legend("topleft", c("Regression Line", "Conf. Band", "Pred. Band"),
+       lty = c(2, 1, 1), col = c("black", "blue", "red"))
+```
+
+
+#LOT DATA
+
+```{r}
+# Lot Data
+lot = housing_fill_drop %>% 
+ select(LotArea, LotFrontage, LotShape, LotConfig, LandContour, LandSlope, Street, Alley, SalePrice)
+```
+
+```{r}
+head(lot)
+```
+```{r}
+lot1 = lot %>% 
+  mutate(., LandSlope = 
+           ifelse(LandSlope == 'Gtl', 0,
+         ifelse(LandSlope == 'Mod', 1, 2)
+           )
+         )
+```
+```{r}
+lot1 = lot1 %>% 
+  mutate(., LandContour = 
+           ifelse(LandContour == 'Lvl', 0,
+           ifelse(LandContour == 'Bnk', 1, 
+           ifelse(LandContour == 'HLS', 2, 3)
+                  )
+                )
+         )
+```
+```{r}
+lot1 = lot1 %>% 
+  mutate(., LotConfig = 
+           ifelse(LotConfig == 'Inside', 0,
+           ifelse(LotConfig == 'Corner', 1, 
+           ifelse(LotConfig == 'FR2', 2, 
+            ifelse(LotConfig == 'FR3', 3, 4
+                   )
+                  )
+                )
+         ))
+```
+```{r}
+lot1 = lot1 %>% 
+   mutate(., LotShape = 
+           ifelse(LotShape == 'Reg', 0,
+           ifelse(LotShape == 'IR1', 1, 
+           ifelse(LotShape == 'IR2', 2, 3
+                   )
+                  )
+                )
+         )
+```
+```{r}
+lot1 = lot1 %>% 
+   mutate(., Street = 
+           ifelse(Street == 'Grvl', 0, 1
+                )
+         )
+```
+```{r}
+lot1 = lot1 %>% 
+   mutate(., Alley = 
+           ifelse(Alley == 'Grvl', 0,
+           ifelse(Alley == 'Pave', 1, 2
+            )
+                )
+         )
+```
+
+```{r}
+head(lot1)
+```
+```{r}
+lot2=lot1 %>% 
+  mutate(., LotFrontage = ifelse(is.na(LotFrontage), 0, LotFrontage
+                                 )
+         )
+```
+```{r}
+unique(lot2$LotFrontage)
+```
+
+```{r}
+head(lot2)
+```
+
+```{r}
+cor(lot2)
+```
+
+
+```{r}
+plot(lot2)
+```
+```{r}
+model_lot = lm(SalePrice ~ ., data = lot2)
+summary(model_lot)
+```
+```{r}
+vif(model_lot)
+```
+
+```{r}
+split_ds1 = sample(nrow(lot2), nrow(lot2)*.7)
+train_lot=lot2[split_ds1,]
+test_lot=lot2[-split_ds1,]
+```
+```{r}
+train_lot_model = lm(SalePrice ~ ., data = train_lot)
+```
+```{r}
+vif(train_lot_model)
+```
+
+```{r}
+#Using stepwise regression to automate the variable selection process
+train_lot_model.empty = lm(SalePrice ~ 1, data = train_lot) #The model with an intercept ONLY
+train_lot_model.full = lm(SalePrice ~ ., data = train_lot) #The model with ALL variables.
+scope = list(lower = formula(train_lot_model.empty), upper = formula(train_lot_model.full))
+scope
+```
+
+```{r}
+bothBIC_train_lot.empty =  step(train_lot_model.empty, scope, direction = "both", k = log(1805))
+```
+```{r}
+summary(bothBIC_train_lot.empty )
+```
+```{r}
+head(lot2)
+```
+```{r}
+lot3 = lot2 %>% 
+  select(., -Alley)
+```
+```{r}
+lot3_model =lm(SalePrice ~ ., data=lot3)
+summary(lot3_model)
+```
+```{r}
+head(lot2)
+```
+```{r}
+lot4 = lot2 %>% 
+  mutate(., LotShape = factor(LotShape), LotConfig =factor(LotConfig), LandContour =factor(LandContour), LandSlope =factor(LandSlope), Street =factor(Street), Alley =factor(Alley))
+```
+```{r}
+head(lot4)
+```
+```{r}
+model_lot4 =lm(SalePrice ~ ., data =lot4)
+```
+```{r}
+summary(model_lot4)
+```
+```{r}
+split_dsf = sample(nrow(lot4), nrow(lot4)*.7)
+train_lot4=lot4[split_ds1,]
+test_lot4=lot4[-split_ds1,]
+```
+```{r}
+train_lot4_model = lm(SalePrice ~ ., data = train_lot4)
+```
+```{r}
+vif(train_lot4_model)
+```
+```{r}
+#Using stepwise regression to automate the variable selection process
+train_lot4_model.empty = lm(SalePrice ~ 1, data = train_lot4) #The model with an intercept ONLY
+train_lot4_model.full = lm(SalePrice ~ ., data = train_lot4) #The model with ALL variables.
+scope = list(lower = formula(train_lot4_model.empty), upper = formula(train_lot4_model.full))
+scope
+```
+```{r}
+bothBIC_train_lot4.empty =  step(train_lot4_model.empty, scope, direction = "both", k = log(1805))
+```
+
+```{r}
+summary(bothBIC_train_lot4.empty)
+```
+```{r}
+head(lot1)
+```
+```{r}
+lot6 = housing_fill_drop %>% 
+   select(Neighborhood, LotArea, LotFrontage, LotShape, LotConfig, LandContour, LandSlope, Street, Alley, PavedDrive, SalePrice) %>% 
+  group_by(.,Neighborhood) %>% 
+  mutate(., LotFrontage = ifelse(is.na(LotFrontage), 0, LotFrontage
+                                 )
+         ) %>% 
+  mutate(., avgfrontage = mean(LotFrontage)) %>% 
+  mutate(., LotFrontage = ifelse(LotFrontage == 0, avgfrontage, LotFrontage
+                                 )
+         )
+```
+```{r}
+head(lot6)
+```
+
+```{r}
+lot7 = lot6 %>% 
+  mutate(., LandSlope = 
+           ifelse(LandSlope == 'Gtl', 0,
+         ifelse(LandSlope == 'Mod', 1, 2)
+           )
+         )
+```
+```{r}
+lot7 = lot7 %>% 
+  mutate(., LandContour = 
+           ifelse(LandContour == 'Lvl', 0,
+           ifelse(LandContour == 'Bnk', 1, 
+           ifelse(LandContour == 'HLS', 2, 3)
+                  )
+                )
+         )
+```
+```{r}
+lot7 = lot7 %>% 
+  mutate(., LotConfig = 
+           ifelse(LotConfig == 'Inside', 0,
+           ifelse(LotConfig == 'Corner', 1, 
+           ifelse(LotConfig == 'FR2', 2, 
+            ifelse(LotConfig == 'FR3', 3, 4
+                   )
+                  )
+                )
+         ))
+```
+```{r}
+lot7 = lot7 %>% 
+   mutate(., LotShape = 
+           ifelse(LotShape == 'Reg', 0,
+           ifelse(LotShape == 'IR1', 1, 
+           ifelse(LotShape == 'IR2', 2, 3
+                   )
+                  )
+                )
+         )
+```
+```{r}
+lot7 = lot7 %>% 
+   mutate(., Street = 
+           ifelse(Street == 'Grvl', 0, 1
+                )
+         )
+```
+```{r}
+lot7 = lot7 %>% 
+   mutate(., Alley = 
+           ifelse(Alley == 'Grvl', 0,
+           ifelse(Alley == 'Pave', 1, 2
+            )
+                )
+         )
+```
+```{r}
+lot7 = lot7 %>% 
+  mutate(., LotShape = factor(LotShape), LotConfig =factor(LotConfig), LandContour =factor(LandContour), LandSlope =factor(LandSlope), Street =factor(Street), Alley =factor(Alley))
+```
+
+```{r}
+lot7 = lot6 %>% ungroup() %>% select(.,-c(Neighborhood, avgfrontage))
+```
+```{r}
+dim(lot7)
+```
+```{r}
+model_lot7 = lm(SalePrice ~ ., data=lot7)
+```
+```{r}
+summary(model_lot7)
+```
+```{r}
+lot7_model.empty = lm(SalePrice ~ 1, data = lot7) #The model with an intercept ONLY
+lot7_model.full = lm(SalePrice ~ ., data = lot7) #The model with ALL variables.
+scope = list(lower = formula(lot7_model.empty), upper = formula(lot7_model.full))
+scope
+```
+```{r}
+bothBIC_lot7_model.empty =  step(lot7_model.empty, scope, direction = "both", k = log(2580))
+```
+```{r}
+summary(bothBIC_lot7_model.empty)
+```
+```{r}
+vif(bothBIC_lot7_model.empty)
+```
+```{r}
+lot6 = housing_fill_drop %>% 
+   select(Neighborhood, LotArea, LotFrontage, LotShape, LotConfig, LandContour, LandSlope, Street, Alley, PavedDrive, SalePrice) %>% 
+  group_by(.,Neighborhood) %>% 
+  mutate(., LotFrontage = ifelse(is.na(LotFrontage), 0, LotFrontage
+                                 )
+         ) %>% 
+  mutate(., avgfrontage = mean(LotFrontage)) %>% 
+  mutate(., LotFrontage = ifelse(LotFrontage == 0, avgfrontage, LotFrontage
+                                 )
+         )
+```
+
+```{r}
+lot8 = lot6 %>% ungroup() %>%select(-c(avgfrontage))
+```
+```{r}
+# lot8$Neighborhood=factor(lot8$Neighborhood, levels = c("NAmes", "CollgCr", "OldTown", "Edwards", "Gilbert", "Somerst ", "Sawyer", "NWAmes",
+#                                                        "NridgHt","SawyerW", "Mitchel", "BrkSide", "Crawfor", "IDOTRR", "NoRidge", "Timber",
+#                                                        "StoneBr", "SWISU", "ClearCr", "MeadowV", "BrDale", "Veenker","Blmngtn", "NPkVill",
+#                                                        "Blueste", "Greens", "GrnHill", "Landmrk")
+#                          )
+lot8$LotShape=factor(lot8$LotShape, levels =c("Reg", "IR1", "IR2", "IR3"))
+lot8$LotConfig=factor(lot8$LotConfig, levels = c("Inside", "Corner","CulDSac", "FR2", "FR3"))
+lot8$Alley=factor(lot8$Alley, levels=c("Naa", "Grvl", "Pave"))
+lot8$PavedDrive=factor(lot8$PavedDrive, levels =c("Y", "N", "P"))
+lot8$Street=factor(lot8$Street, levels=c("Pave", "Grvl"))
+lot8$LandContour=factor(lot8$LandContour, levels =c("Lvl", "HLS", "Bnk", "Low"))
+lot8$LandSlope=factor(lot8$LandSlope, levels =c("Gtl", "Mod", "Sev"))
+```
+
+```{r}
+model_lot8 = lm(SalePrice ~ ., data=lot8)
+```
+```{r}
+summary(model_lot8)
+```
+```{r}
+lot8_model.empty = lm(SalePrice ~ 1, data = lot8) #The model with an intercept ONLY
+lot8_model.full = lm(SalePrice ~ ., data = lot8) #The model with ALL variables.
+scope = list(lower = formula(lot8_model.empty), upper = formula(lot8_model.full))
+#scope
+head(lot8)
+```
+```{r}
+unique(lot8)
+```
+
+
+```{r}
+bothBIC_lot8_model.empty =  step(lot8_model.empty, scope, direction = "both", k = log(2580))
+```
+```{r}
+summary(bothBIC_lot8_model.empty)
+```
+```{r}
+
+```
+
+```{r}
+#EXTRA
+```
+
+```{r}
+housing_fill[, order(names(housing_fill))]
+head(housing_fill_drop[order(names(housing_fill_drop))])
+```
+
+
+```{r}
+model.saturated = lm(SalePrice ~ ., data = housing_fill_drop[-c(1:2)])
+```
+```{r}
+summary(model.saturated)
+```
+```{r}
+str(housing_fill_drop[-c(1:2)])
+```
