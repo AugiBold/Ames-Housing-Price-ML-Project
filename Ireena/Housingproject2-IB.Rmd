@@ -1,0 +1,536 @@
+---
+title: "R Notebook"
+#output: html_notebook
+---
+
+```{r}
+housing_drop_impute=read.csv('housing_fill_drop1.csv', stringsAsFactors = TRUE, header = TRUE)
+```
+```{r}
+housing_drop_impute = housing_drop_impute[, -1]
+```
+```{r}
+head(housing_drop_impute)
+```
+
+```{r}
+housing_drop_impute_fit = lm(SalePrice ~ ., data = housing_drop_impute) 
+```
+```{r}
+id.vars = attributes(alias(housing_drop_impute_fit)$Complete)$dimnames[[1]]
+#housing_drop_impute_fit = lm(SalePrice ~ ., data = housing_drop_impute[,-id.vars])
+```
+```{r}
+id.vars
+```
+
+```{r}
+housing_drop_impute_clean= 
+  housing_drop_impute %>% 
+  filter(Exterior2nd!="PreCast") %>% 
+  filter(BsmtCond!="Nb") %>% 
+  filter(BsmtFinType1!="Nb") %>% 
+  filter(GarageQual!="Ng") %>% 
+  filter(GarageCond!="Ng") %>% 
+  filter(Exterior2nd!="CBlock") %>% 
+  select(-c(LowQualFinSF,TotalBsmtSF)) %>% 
+  select(-c(GrLivArea))
+  
+```
+
+```{r}
+dim(housing_drop_impute_clean)
+```
+```{r}
+#fit2 = lm(SalePrice ~ ., data = housing_drop_impute_clean)
+attributes(alias(fit2)$Complete)$dimnames[[1]]
+```
+
+
+```{r}
+as.data.frame(vif(fit2)) %>% 
+  arrange(desc(GVIF^(1/(2*Df))))
+```
+
+```{r}
+housing_drop_impute_clean= 
+  housing_drop_impute_clean %>% 
+  select(-c(GrLivArea))
+
+fit3 = lm(SalePrice ~ ., data = housing_drop_impute_clean)
+as.data.frame(vif(fit3)) %>% 
+  arrange(desc(GVIF^(1/(2*Df))))
+```
+
+```{r}
+housing_drop_impute_clean= 
+  housing_drop_impute %>% 
+  # filter(Exterior2nd!="PreCast") %>% 
+  # filter(BsmtCond!="Nb") %>% 
+  # filter(BsmtFinType1!="Nb") %>% 
+  # filter(GarageQual!="Ng") %>% 
+  # filter(GarageCond!="Ng") %>% 
+  # filter(Exterior2nd!="CBlock") %>% 
+  # select(-c(LowQualFinSF,TotalBsmtSF)) %>% 
+  select(-c(GrLivArea,MSSubClass))
+dim(housing_drop_impute_clean)
+```
+```{r}
+fit4 = lm(SalePrice ~ ., data = housing_drop_impute_clean)
+```
+
+
+```{r}
+summary(fit4)
+```
+```{r}
+housing_drop_impute_clean.empty = lm(SalePrice ~ 1, data = housing_drop_impute_clean)
+housing_drop_impute_clean.full = lm(SalePrice ~ ., data = housing_drop_impute_clean)
+scope = list(lower = formula(housing_drop_impute_clean.empty), upper = formula(housing_drop_impute_clean.full))
+```
+```{r}
+bothBIC_housing_drop_impute_clean.empty =  step(housing_drop_impute_clean.empty, scope, direction = "both", k = log(2580), verbose=FALSE)
+```
+```{r}
+bothBIC_housing_drop_impute_clean.full =  step(housing_drop_impute_clean.full, scope, direction = "both", k = log(2580))
+```
+```{r}
+summary(bothBIC_housing_drop_impute_clean.full)
+```
+```{r}
+fit5 = lm(SalePrice ~ BedroomAbvGr + BldgType + BsmtExposure + BsmtFinSF1 
++ BsmtFinSF2 
++ BsmtQual 
++ BsmtUnfSF				
++ Condition2 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ GarageArea 
++ KitchenQual 
++ LotArea 
++ LowQualFinSF 
++ MasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ TotalBsmtSF 
++ X1stFlrSF 
++ X2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd 
+, data = housing_drop_impute_clean)
+```
+
+```{r}
+summary(fit5)
+```
+
+```{r}
+BIC(fit5)
+```
+```{r}
+# Examined features in fit5  and replaced Condition2 with Condition1 to see how it affected the BIC. Ran fit6
+fit6 = lm(SalePrice ~ BedroomAbvGr + BldgType + BsmtExposure + BsmtFinSF1 
++ BsmtFinSF2 
++ BsmtQual 
++ BsmtUnfSF				
++ Condition1 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ GarageArea 
++ KitchenQual 
++ LotArea 
++ LowQualFinSF 
++ MasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ TotalBsmtSF 
++ X1stFlrSF 
++ X2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd 
+, data = housing_drop_impute_clean)
+```
+
+```{r}
+summary(fit6)
+```
+
+```{r}
+BIC(fit6)
+```
+
+```{r}
+# Checked VIF and found it to be ver high for BsmtFinSF1. Dropped it and ran the fit again
+as.data.frame(vif(fit6)) %>% 
+  arrange(desc(GVIF^(1/(2*Df))))
+```
+```{r}
+# Fit after dropped BsmtFinSF2. All the inflation factors were in control
+fit61 = lm(SalePrice ~ 
+             BedroomAbvGr 
+           + BldgType 
+           + BsmtExposure 
+           + BsmtFinSF1 
+# + BsmtFinSF2 
++ BsmtQual 
++ BsmtUnfSF				
++ Condition1 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ GarageArea 
++ KitchenQual 
++ LotArea 
++ LowQualFinSF 
++ MasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ TotalBsmtSF 
++ X1stFlrSF 
++ X2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd 
+, data = housing_drop_impute_clean)
+
+BIC(fit61)
+
+as.data.frame(vif(fit61)) %>% 
+  arrange(desc(GVIF^(1/(2*Df))))
+```
+
+```{r}
+#Decided to replace BedroomAbvGr with TotalRmsAbvGr and ran the fit again
+fit7 = lm(SalePrice ~ TotRmsAbvGrd + BldgType + BsmtExposure + BsmtFinSF1 
++ BsmtFinSF2 
++ BsmtQual 
++ BsmtUnfSF				
++ Condition2 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ GarageArea 
++ KitchenQual 
++ LotArea 
++ LowQualFinSF 
++ MasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ TotalBsmtSF 
++ X1stFlrSF 
++ X2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd 
+, data = housing_drop_impute_clean)
+```
+
+```{r}
+summary(fit7)
+```
+
+```{r}
+#BIC went down a bit drom 59380 to 59298
+BIC(fit7)
+```
+```{r}
+fit71 = lm(SalePrice ~ TotRmsAbvGrd + BldgType + BsmtExposure + BsmtFinSF1 
+# + BsmtFinSF2 
++ BsmtQual 
++ BsmtUnfSF				
++ Condition2 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ GarageArea 
++ KitchenQual 
++ LotArea 
++ LowQualFinSF 
++ MasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ TotalBsmtSF 
++ X1stFlrSF 
++ X2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd 
+, data = housing_drop_impute_clean)
+```
+
+```{r}
+# Added other variables to the ones in fit7. These variables consisted of the ones we had originally shortlisted based on our univariate and other EDA.
+fit8 = lm(SalePrice ~ TotRmsAbvGrd + BldgType + BsmtExposure + BsmtFinSF1 
++ BsmtQual 
++ BsmtUnfSF				
++ Condition2 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ GarageArea 
++ KitchenQual 
++ LotArea 
++ LowQualFinSF 
++ MasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ TotalBsmtSF 
++ X1stFlrSF 
++ X2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd 
++BsmtFullBath+Electrical +Exterior1st+FireplaceQu+Foundation+GarageFinish +GarageType+Heating+HeatingQC+HouseStyle+LandSlope+LotConfig+LotFrontage+PavedDrive+Street+MSZoning+MoSold
+, data = housing_drop_impute_clean)
+```
+
+```{r}
+summary(fit8)
+```
+
+```{r}
+BIC(fit8)
+```
+```{r}
+as.data.frame(vif(fit8)) %>% 
+  arrange(desc(GVIF^(1/(2*Df))))
+```
+
+```{r}
+plot(fit8)
+```
+
+```{r}
+head(housing_drop_impute_clean)
+```
+```{r}
+housing_drop_impute_tr = housing_drop_impute_clean %>% 
+  mutate(., logSalePrice = log(SalePrice)) %>% 
+  mutate(., sqrtBsmtFinSF1 = sqrt(ifelse(BsmtFinSF1 <40, 40, BsmtFinSF1))) %>% 
+  mutate(., sqrtBsmtUnfSF = sqrt(ifelse(BsmtUnfSF <0, 0, BsmtUnfSF))) %>% 
+  mutate(., logGarageArea = log(ifelse(GarageArea < 1, 1, GarageArea))) %>% 
+  mutate(., logLotArea = log(ifelse(LotArea <2000, 2000, LotArea))) %>% 
+  mutate(., flLowQualFinSF = ifelse(LowQualFinSF<0, 0, LowQualFinSF)) %>% 
+  mutate(., logMasVnrArea = log(ifelse(MasVnrArea<20, 20, MasVnrArea))) %>% 
+  mutate(., logTotalBsmtSF = log(ifelse(TotalBsmtSF<1, 1, TotalBsmtSF))) %>% 
+  mutate(., log1stFlrSF = log(X1stFlrSF)) %>% 
+  mutate(., fl2ndFlrSF = ifelse(X2ndFlrSF<0, 0, X2ndFlrSF)) %>% 
+  mutate(., logLotFrontage = log(ifelse(LotFrontage <50, 50, LotFrontage)))
+```
+```{r}
+dim(housing_drop_impute_tr)
+```
+
+
+```{r}
+# fit72 has the same variables as fit7 except that the area variables are transformed in this
+fit72 = lm(logSalePrice ~ TotRmsAbvGrd + BldgType + BsmtExposure + sqrtBsmtFinSF1
+# + BsmtFinSF2 
++ BsmtQual 
++ sqrtBsmtUnfSF				
++ Condition2 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ logGarageArea 
++ KitchenQual 
++ logLotArea 
++ flLowQualFinSF 
++ logMasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ logTotalBsmtSF 
++ log1stFlrSF 
++ fl2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd 
+, data = housing_drop_impute_tr)
+```
+
+```{r}
+# Got a pretty low BIC
+BIC(fit72)
+```
+```{r}
+vif(fit72)
+```
+
+```{r}
+fit81 = lm(logSalePrice ~ TotRmsAbvGrd + BldgType + BsmtExposure + sqrtBsmtFinSF1
++ BsmtQual 
++ sqrtBsmtUnfSF				
++ Condition2 
++ ExterQual 
++ Fireplaces 
++ Functional 
++ logGarageArea 
++ KitchenQual 
++ logLotArea 
++ flLowQualFinSF 
++ logMasVnrArea 
++ Neighborhood 
++ OverallCond 
++ OverallQual 
++ RoofMatl 
++ SaleCondition 
++ ScreenPorch 
++ logTotalBsmtSF 
++ log1stFlrSF 
++ fl2ndFlrSF 
++ YearBuilt 
++ YearRemodAdd
++BsmtFullBath+Electrical +Exterior1st+FireplaceQu+Foundation+GarageFinish +GarageType+Heating+HeatingQC+HouseStyle+LandSlope+LotConfig+logLotFrontage+PavedDrive+Street+MSZoning+MoSold
+, data = housing_drop_impute_tr)
+```
+```{r}
+#Slightly higher BIC than fit72
+BIC(fit81)
+```
+```{r}
+summary(fit81)
+```
+
+```{r}
+plot(fit72)
+```
+
+```{r}
+plot(fit81)
+```
+```{r}
+write.csv(housing_drop_impute_tr, "housing_drop_impute_tr.csv")
+```
+
+
+```{r}
+hist(housing_drop_impute_clean$SalePrice, breaks = 50)
+```
+
+
+```{r}
+hist(log(housing_drop_impute_clean$SalePrice), breaks = 50)
+```
+```{r}
+hist(housing_drop_impute_clean$BsmtFinSF1[housing_drop_impute_clean$BsmtFinSF1>40], breaks = 50)
+```
+```{r}
+hist(sqrt(housing_drop_impute_clean$BsmtFinSF1[housing_drop_impute_clean$BsmtFinSF1>40]), breaks = 50)
+```
+
+
+```{r}
+hist(housing_drop_impute_clean$BsmtUnfSF, breaks = 50)
+hist(housing_drop_impute_clean$BsmtUnfSF[housing_drop_impute_clean$BsmtUnfSF>0], breaks = 50)
+```
+```{r}
+hist(sqrt(housing_drop_impute_clean$BsmtUnfSF[housing_drop_impute_clean$BsmtUnfSF>0]), breaks = 50)
+```
+```{r}
+hist(housing_drop_impute_clean$GarageArea, breaks = 50)
+hist(housing_drop_impute_clean$GarageArea[housing_drop_impute_clean$GarageArea>0], breaks = 50)
+```
+```{r}
+hist(log(housing_drop_impute_clean$GarageArea[housing_drop_impute_clean$GarageArea>0]), breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$LotArea[housing_drop_impute_clean$LotArea>2000], breaks = 50)
+```
+```{r}
+hist(log(housing_drop_impute_clean$LotArea[housing_drop_impute_clean$LotArea>2000]), breaks = 50)
+```
+```{r}
+hist(housing_drop_impute_clean$LowQualFinSF, breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$LowQualFinSF[housing_drop_impute_clean$LowQualFinSF>0], breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$MasVnrArea, breaks = 50)
+```
+```{r}
+hist(log(housing_drop_impute_clean$MasVnrArea[housing_drop_impute_clean$MasVnrArea>20]), breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$TotalBsmtSF, breaks = 50)
+```
+```{r}
+hist(log(housing_drop_impute_clean$TotalBsmtSF[housing_drop_impute_clean$TotalBsmtSF>0]), breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$X1stFlrSF, breaks = 50)
+```
+```{r}
+hist(log(housing_drop_impute_clean$X1stFlrSF), breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$X2ndFlrSF, breaks = 50)
+```
+```{r}
+hist(housing_drop_impute_clean$X2ndFlrSF[housing_drop_impute_clean$X2ndFlrSF>0], breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$LotFrontage, breaks = 50)
+```
+```{r}
+hist(log(housing_drop_impute_clean$LotFrontage[housing_drop_impute_clean$LotFrontage>50]), breaks = 50)
+```
+
+```{r}
+hist(housing_drop_impute_clean$ScreenPorch[housing_drop_impute_clean$ScreenPorch>0], breaks = 50)
+```
+```{r}
+hist(housing_drop_impute_clean$EnclosedPorch[housing_drop_impute_clean$EnclosedPorch>0], breaks = 50)
+```
+```{r}
+#Ran the BIC with transformed variables
+housing_drop_impute_tr1 = housing_drop_impute_tr %>% 
+  select(-c("SalePrice", "BsmtFinSF1", "BsmtUnfSF", "GarageArea", "LotArea", "LowQualFinSF", "MasVnrArea", "TotalBsmtSF", "X1stFlrSF", "X2ndFlrSF", "LotFrontage"))
+
+housing_drop_impute_tr.empty = lm(logSalePrice ~ 1, data = housing_drop_impute_tr1)
+housing_drop_impute_tr.full = lm(logSalePrice ~ ., data = housing_drop_impute_tr1)
+scope = list(lower = formula(housing_drop_impute_tr.empty), upper = formula(housing_drop_impute_tr.full))
+```
+```{r}
+bothBIC_housing_drop_impute_tr.empty =  step(housing_drop_impute_tr.empty, scope, direction = "both", k = log(2580), verbose=FALSE)
+```
+```{r}
+BIC(bothBIC_housing_drop_impute_tr.empty)
+```
+```{r}
+bothBIC_housing_drop_impute_tr.full =  step(housing_drop_impute_tr.full, scope, direction = "both", k = log(2580), verbose=FALSE)
+```
+
+
