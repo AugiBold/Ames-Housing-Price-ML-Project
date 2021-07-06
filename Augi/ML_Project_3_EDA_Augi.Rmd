@@ -184,6 +184,26 @@ area_cor2 %>% arrange(desc(area_cor2))
 ```
 
 ```{r}
+temp = building %>% select(GrLivArea, GarageArea, YearBuilt, TotalBsmtSF, X1stFlrSF, BsmtFinSF1)
+temp = temp %>% replace(is.na(.), 0)
+colSums(is.na(temp))
+```
+
+
+```{r}
+temp_cor = cor(temp, building$SalePrice, method ="pearson")
+
+temp_cor = data.frame(temp_cor)
+colnames(temp_cor)=c('Correlation')
+temp_cor %>% arrange(desc(temp_cor))
+```
+
+
+```{r}
+```
+
+
+```{r}
 building_without_area = building %>% select(SalePrice, (-colnames(area_sf)))
 str(building_without_area)
 ```
